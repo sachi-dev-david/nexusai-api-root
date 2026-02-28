@@ -1,0 +1,15 @@
+-- ============================================================
+-- 說明：seed.sql 裡的 BCrypt hash 需要在實際環境產生
+-- 請先執行以下 C# snippet 取得正確的 hash，再填入 seed.sql
+-- ============================================================
+--
+-- 方法一：用 dotnet-script 直接執行（需安裝 dotnet-script）
+--   dotnet script gen_hash.csx
+--
+-- 方法二：在專案啟動時暫時加入此段 code 到 Program.cs（執行一次後移除）：
+--
+--   Console.WriteLine("admin123 => " + BCrypt.Net.BCrypt.HashPassword("admin123", 12));
+--   Console.WriteLine("eng123   => " + BCrypt.Net.BCrypt.HashPassword("eng123",   12));
+--   Console.WriteLine("op123    => " + BCrypt.Net.BCrypt.HashPassword("op123",    12));
+--
+-- 方法三：使用線上工具 https://bcrypt.online（選 Cost 12）

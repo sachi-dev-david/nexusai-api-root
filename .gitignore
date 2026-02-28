@@ -1,0 +1,20 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.swp
+*.sql
+
+## Uploads
+uploads/
+
+## Environment secrets
+appsettings.Production.json
+secrets.json
+
+## IDE
+.vscode/
+.idea/
+*.DS_Store
