@@ -27,7 +27,7 @@ public class QuotePlugin
     }
 
     /// <summary>
-    /// llama3.2:3b 的 Description 要用英文且非常簡短，
+    /// llama3.2:latest 的 Description 要用英文且非常簡短，
     /// 中文 description 在 3b 模型容易被忽略
     /// </summary>
     [KernelFunction("query_quote")]

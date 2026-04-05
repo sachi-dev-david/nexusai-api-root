@@ -17,14 +17,25 @@ public class FilesController : ControllerBase
     private readonly IFileService _fileService;
     private readonly ILogger<FilesController> _logger;
 
-    // 允許的檔案類型
+    // 允許的檔案類型（MIME）
     private static readonly string[] AllowedContentTypes =
     [
         "application/pdf",
         "image/jpeg", "image/png", "image/webp",
         "text/plain", "text/csv",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // xlsx
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" // docx
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // docx
+        // CAD files
+        "application/step", "model/step", "application/sla",
+        "application/octet-stream" // browsers often send STP/STEP as binary
+    ];
+
+    // 允許的副檔名（CAD 類型補充，繞過瀏覽器 MIME 不一致問題）
+    private static readonly string[] AllowedExtensions =
+    [
+        ".pdf", ".jpg", ".jpeg", ".png", ".webp",
+        ".txt", ".csv", ".xlsx", ".docx",
+        ".stp", ".step" // CAD STEP 格式
     ];
 
     private const long MaxFileSizeBytes = 20 * 1024 * 1024; // 20 MB
@@ -56,8 +67,11 @@ public class FilesController : ControllerBase
         if (file.Length > MaxFileSizeBytes)
             return BadRequest(ApiResponse.Fail("檔案大小不可超過 20MB"));
 
-        if (!AllowedContentTypes.Contains(file.ContentType.ToLower()))
-            return BadRequest(ApiResponse.Fail($"不支援的檔案類型：{file.ContentType}"));
+        var ext = Path.GetExtension(file.FileName).ToLower();
+        var mimeOk = AllowedContentTypes.Contains(file.ContentType.ToLower());
+        var extOk  = AllowedExtensions.Contains(ext);
+        if (!mimeOk && !extOk)
+            return BadRequest(ApiResponse.Fail($"不支援的檔案類型：{file.ContentType}（{ext}）"));
 
         var userId = GetUserId();
 

@@ -29,5 +29,6 @@ public class MlDbContext : DbContext
             e.Property(q => q.TotalCost)
              .HasColumnType("decimal(18,2)");
         });
+
     }
 }

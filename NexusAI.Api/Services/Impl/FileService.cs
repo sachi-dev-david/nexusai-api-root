@@ -57,6 +57,7 @@ public class FileService : IFileService
         {
             FileId    = fileId,
             FileName  = file.FileName,
+            FilePath  = Path.GetFullPath(savePath),
             SizeBytes = file.Length,
             ExpiresAt = expiresAt,
         };

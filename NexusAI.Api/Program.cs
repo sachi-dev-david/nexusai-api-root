@@ -103,6 +103,15 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         mysql => mysql.EnableRetryOnFailure(3)
     )
 );
+// 同時注冊 Factory，供需要手動控制 lifetime 的 Controller 使用（如 QuotesController）
+builder.Services.AddDbContextFactory<AppDbContext>(options =>
+    options.UseMySql(
+        builder.Configuration.GetConnectionString("MariaDB")
+        ?? throw new InvalidOperationException("ConnectionStrings:MariaDB 未設定"),
+        ServerVersion.AutoDetect(builder.Configuration.GetConnectionString("MariaDB")!),
+        mysql => mysql.EnableRetryOnFailure(3)
+    ), ServiceLifetime.Scoped
+);
 
 // ── MLDATABASE（報價系統）────────────────────────────────────────────────
 builder.Services.AddDbContextFactory<MlDbContext>(options =>
@@ -113,6 +122,28 @@ builder.Services.AddDbContextFactory<MlDbContext>(options =>
         mysql => mysql.EnableRetryOnFailure(3)
     )
 );
+
+// ── HTTP CLIENTS FOR EXTERNAL SERVICES ────────────────────────────────────
+builder.Services.AddHttpClient("Ollama", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Ollama:BaseUrl"] ?? "http://localhost:11434");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+builder.Services.AddHttpClient("Vision", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Vision:BaseUrl"] ?? "http://localhost:5051");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+builder.Services.AddHttpClient("Math", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Math:BaseUrl"] ?? "http://localhost:8080");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+builder.Services.AddHttpClient("FeatureExtract", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["FeatureExtract:BaseUrl"] ?? "http://localhost:5051");
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
 
 // ── SEMANTIC KERNEL + OLLAMA ──────────────────────────────────────────────
 #pragma warning disable SKEXP0001, SKEXP0010, SKEXP0070
@@ -148,6 +179,9 @@ builder.Services.AddSingleton(sp =>
         new ProcessPlugin(logFactory.CreateLogger<ProcessPlugin>()), "Process");
     kernel.Plugins.AddFromObject(
         new RagPlugin(logFactory.CreateLogger<RagPlugin>()), "Rag");
+    var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+    kernel.Plugins.AddFromObject(
+        new AddQuotePlugin(mlDbFactory, logFactory.CreateLogger<AddQuotePlugin>(), httpClientFactory), "AddQuote");
 
     logger.LogInformation("Semantic Kernel 初始化完成，已載入 {Count} 個 Plugin", kernel.Plugins.Count());
 
@@ -161,6 +195,7 @@ builder.Services.AddScoped<IConversationService, ConversationService>();
 builder.Services.AddScoped<IChatService, ChatService>();
 builder.Services.AddScoped<IDeviceService, DeviceService>();
 builder.Services.AddScoped<IFileService, FileService>();
+builder.Services.AddScoped<IModelService, ModelService>();
 builder.Services.AddScoped<FileService>();
 
 // ── BUILD ─────────────────────────────────────────────────────────────────

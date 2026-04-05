@@ -11,6 +11,7 @@ public class AppDbContext : DbContext
     public DbSet<ConversationEntity> Conversations => Set<ConversationEntity>();
     public DbSet<MessageEntity>      Messages      => Set<MessageEntity>();
     public DbSet<UploadedFileEntity> UploadedFiles => Set<UploadedFileEntity>();
+    public DbSet<BaseParameterEntity> BaseParameters => Set<BaseParameterEntity>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -54,6 +55,13 @@ public class AppDbContext : DbContext
             e.HasIndex(f => f.UserId);
             e.HasIndex(f => f.ExpiresAt);   // 方便定時清除過期檔案
             e.Property(f => f.UploadedAt).HasDefaultValueSql("UTC_TIMESTAMP()");
+        });
+
+        // ── BaseParameters ─────────────────────────────────────────────
+        model.Entity<BaseParameterEntity>(e =>
+        {
+            e.ToTable("baseparameters");
+            e.HasIndex(b => b.Type);
         });
     }
 }

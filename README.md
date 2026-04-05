@@ -1,6 +1,6 @@
 # NexusAI Backend
 
-工廠智能助手後端 — ASP.NET Core 9 + Semantic Kernel + llama3.2 + MariaDB
+工廠智能助手後端 — ASP.NET Core 9 + Semantic Kernel + llama3.2:latest + MariaDB
 
 ---
 
@@ -10,7 +10,7 @@
 |------|------------|
 | .NET | 9.0 |
 | Semantic Kernel | 1.x（含 OpenAI-compatible connector） |
-| LLM | llama3.2:3b（透過 Ollama，原生 Function Calling） |
+| LLM | llama3.2:latest（透過 Ollama，原生 Function Calling） |
 | ORM | EF Core 9 + Pomelo.EntityFrameworkCore.MySql |
 | 主資料庫 | MariaDB `nexusai`（使用者、對話、訊息、上傳檔案） |
 | 報價資料庫 | MariaDB `mldatabase`（`machinelearning_quatation`） |
@@ -35,8 +35,8 @@
 ```bash
 ollama serve
 
-# llama3.2 支援原生 Function Calling，約 2GB
-ollama pull llama3.2
+# llama3.2:latest 支援原生 Function Calling
+ollama pull llama3.2:latest
 ```
 
 ### 2. 初始化資料庫
@@ -60,7 +60,7 @@ mysql -u root -p < mldatabase_init.sql
 },
 "Ollama": {
   "BaseUrl": "http://localhost:11434",
-  "Model":   "llama3.2"
+  "Model":   "llama3.2:latest"
 }
 ```
 
@@ -162,25 +162,25 @@ GET /api/debug/intent?message=請查詢HZDCIM報價
 
 ## Function Calling 架構
 
-llama3.2:3b 支援原生 Function Calling，整合 SK `AutoInvokeKernelFunctions`：
+llama3.2:latest 支援原生 Function Calling，整合 SK `AutoInvokeKernelFunctions`：
 
 ```
 使用者輸入
     ↓
-SK AutoInvokeKernelFunctions（llama3.2 原生 tool call）
+SK AutoInvokeKernelFunctions（llama3.2:latest 原生 tool call）
     ↓
-llama3.2 判斷意圖 → 選擇 Plugin + 解析參數
+llama3.2:latest 判斷意圖 → 選擇 Plugin + 解析參數
     ↓
 SK 自動呼叫 Plugin → 查詢 MariaDB（mldatabase）
     ↓
 SkillInvocationFilter 攔截 → 推送 skill_start / skill_done SSE 事件
     ↓
-llama3.2 整理查詢結果 → 繁體中文回覆串流輸出
+llama3.2:latest 整理查詢結果 → 繁體中文回覆串流輸出
 ```
 
-> **3b 容錯機制**：若 llama3.2:3b 呼叫完 tool 後沒有輸出整理文字（3b 已知行為），後端自動補一次不帶 tool 的 LLM 請求，強制整理結果後輸出。
+> **容錯機制**：若 llama3.2:latest 呼叫完 tool 後沒有輸出整理文字，後端自動補一次不帶 tool 的 LLM 請求，強制整理結果後輸出。
 
-> **Plugin Description 使用英文**：實測 llama3.2:3b 對英文 description 的 function calling 觸發率明顯高於中文。
+> **Plugin Description 使用英文**：實測 llama3.2:latest 對英文 description 的 function calling 觸發率明顯高於中文。
 
 ---
 

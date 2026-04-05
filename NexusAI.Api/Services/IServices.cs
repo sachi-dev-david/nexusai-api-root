@@ -41,4 +41,14 @@ public interface IDeviceService
 public interface IFileService
 {
     Task<FileUploadResponse> UploadAsync(IFormFile file, string userId);
+    Task<string?> GetFilePathAsync(string fileId, string userId);
+}
+
+// ── MODEL STATUS ─────────────────────────────────────────────────────────
+public interface IModelService
+{
+    Task<AllModelsStatus> GetAllModelsStatusAsync();
+    Task<ModelStatus> GetOllamaStatusAsync();
+    Task<ModelStatus> GetVisionStatusAsync();
+    Task<ModelStatus> GetMathStatusAsync();
 }

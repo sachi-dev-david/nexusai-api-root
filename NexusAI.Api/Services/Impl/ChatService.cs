@@ -8,6 +8,7 @@ using NexusAI.Api.Plugins;
 using NexusAI.Api.Services;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
+using System.Text.Json;
 
 namespace NexusAI.Api.Services.Impl;
 
@@ -55,7 +56,7 @@ public class ChatService : IChatService
             Timestamp = DateTime.UtcNow
         });
 
-        // ── 2. SK 設定（llama3.2 原生 function calling）────────────────────
+        // ── 2. SK 設定（llama3.2:latest 原生 function calling）────────────────────
 #pragma warning disable SKEXP0001
         var settings = new OpenAIPromptExecutionSettings
         {
@@ -74,7 +75,7 @@ public class ChatService : IChatService
             reqKernel.FunctionInvocationFilters.Add(filter);
 
             var chat = reqKernel.GetRequiredService<IChatCompletionService>();
-            _logger.LogInformation("呼叫 llama3.2：{Msg}", request.Message);
+            _logger.LogInformation("呼叫 llama3.2:latest：{Msg}", request.Message);
 
             var replyBuilder = new System.Text.StringBuilder();
 
@@ -120,11 +121,11 @@ public class ChatService : IChatService
 
             fullReply = replyBuilder.ToString();
 
-            // ── llama3.2:3b 特殊狀況：呼叫了 tool 但沒有輸出整理文字 ───
+            // ── llama3.2:latest 特殊狀況：呼叫了 tool 但沒有輸出整理文字 ───
             // 此時 tokenEvents 是空的，需要再 call 一次 LLM 請它整理結果
             if (skillRecords.Count > 0 && tokenEvents.Count == 0)
             {
-                _logger.LogWarning("llama3.2 呼叫了 tool 但沒有輸出回覆，補一次整理請求");
+                _logger.LogWarning("llama3.2:latest 呼叫了 tool 但沒有輸出回覆，補一次整理請求");
 
                 // tool 結果已被 SK 自動加進 chatHistory，直接再問一次
                 chatHistory.AddUserMessage("Please summarize the tool results above in Traditional Chinese (繁體中文).");
@@ -218,6 +219,7 @@ public class ChatService : IChatService
 
             IMPORTANT RULES:
             - When user asks about quotations, quotes, pricing, costs, or quote records → call query_quote or query_quote_summary tool IMMEDIATELY. Never answer from memory.
+            - When user asks to create a new quotation, add a quotation, or 新增報價 → call add_quote tool IMMEDIATELY with the required parameters.
             - After tool returns data → present the results clearly in Traditional Chinese using tables or bullet points.
             - Never fabricate numbers or data not returned by a tool.
             """);
@@ -259,7 +261,13 @@ public class SkillInvocationFilter : IFunctionInvocationFilter
 
         await next(ctx);
 
+        // 取得 plugin 回傳結果，解析內部的步驟標記
         var result = ctx.Result?.GetValue<object>();
+        var resultStr = result as string ?? "";
+
+        // 解析步驟標記並發送 SSE 事件
+        ParseAndEmitStepEvents(resultStr);
+
         _logger.LogInformation("✓ Plugin 完成：{Name}", name);
 
         await _writer.WriteAsync(new StreamEvent
@@ -269,5 +277,103 @@ public class SkillInvocationFilter : IFunctionInvocationFilter
             SkillArgs   = args,
             SkillResult = result,
         });
+    }
+
+    /// <summary>
+    /// 解析 plugin 回傳字串中的步驟標記，發送對應的 SSE 事件
+    /// 標記格式：
+    ///   [STEP_START:step_name][]message[/STEP_START]
+    ///   [STEP_DONE:step_name][message][json_data][/STEP_DONE]
+    ///   [STEP_ERROR:step_name][message][/STEP_ERROR]
+    /// </summary>
+    private void ParseAndEmitStepEvents(string resultStr)
+    {
+        if (string.IsNullOrEmpty(resultStr)) return;
+
+        // 解析 StepStart
+        ParseStepMarker(resultStr, "[STEP_START:", "[/STEP_START]",
+            (step, msg) => _writer.TryWrite(new StreamEvent
+            {
+                Type = StreamEventType.StepStart,
+                Step = step,
+                StepMessage = msg
+            }));
+
+        // 解析 StepDone
+        ParseStepMarkerWithData(resultStr, "[STEP_DONE:", "[/STEP_DONE]",
+            (step, msg, data) => _writer.TryWrite(new StreamEvent
+            {
+                Type = StreamEventType.StepDone,
+                Step = step,
+                StepMessage = msg,
+                StepData = data
+            }));
+
+        // 解析 StepError
+        ParseStepMarker(resultStr, "[STEP_ERROR:", "[/STEP_ERROR]",
+            (step, msg) => _writer.TryWrite(new StreamEvent
+            {
+                Type = StreamEventType.StepError,
+                Step = step,
+                StepMessage = msg
+            }));
+    }
+
+    private static readonly string[] StepSeparators = { "[]" };
+
+    private void ParseStepMarker(string text, string startTag, string endTag,
+        Action<string, string> onFound)
+    {
+        var startIdx = 0;
+        while (true)
+        {
+            var p = text.IndexOf(startTag, startIdx);
+            if (p < 0) break;
+            var q = text.IndexOf(endTag, p);
+            if (q < 0) break;
+
+            var content = text.Substring(p + startTag.Length, q - p - startTag.Length);
+            var parts = content.Split(StepSeparators, StringSplitOptions.None);
+            if (parts.Length >= 1)
+            {
+                var step = parts[0].Trim();
+                var msg = parts.Length > 1 ? parts[1].Trim() : "";
+                onFound(step, msg);
+            }
+            startIdx = q + endTag.Length;
+        }
+    }
+
+    private void ParseStepMarkerWithData(string text, string startTag, string endTag,
+        Action<string, string, object?> onFound)
+    {
+        var startIdx = 0;
+        while (true)
+        {
+            var p = text.IndexOf(startTag, startIdx);
+            if (p < 0) break;
+            var q = text.IndexOf(endTag, p);
+            if (q < 0) break;
+
+            var content = text.Substring(p + startTag.Length, q - p - startTag.Length);
+            var parts = content.Split(StepSeparators, StringSplitOptions.None);
+            if (parts.Length >= 2)
+            {
+                var step = parts[0].Trim();
+                var msg = parts[1].Trim();
+                object? data = null;
+                if (parts.Length >= 3)
+                {
+                    var dataStr = parts[2].Trim();
+                    if (!string.IsNullOrEmpty(dataStr))
+                    {
+                        try { data = JsonSerializer.Deserialize<object>(dataStr); }
+                        catch { data = dataStr; }
+                    }
+                }
+                onFound(step, msg, data);
+            }
+            startIdx = q + endTag.Length;
+        }
     }
 }
