@@ -78,8 +78,15 @@ public class QuotePlugin
 
         var sb = new StringBuilder();
         sb.AppendLine($"Found {total} records, showing {rows.Count}.");
-        sb.AppendLine($"Total cost sum: {rows.Sum(r => r.TotalCost):N0} | Average: {rows.Average(r => r.TotalCost):N0}");
-        sb.AppendLine(JsonSerializer.Serialize(new { total, shown = rows.Count, rows }, JsonOpts));
+        sb.AppendLine($"Total cost sum: {rows.Sum(r => r.TotalCost):N2} | Average: {rows.Average(r => r.TotalCost):N2}");
+        sb.AppendLine();
+        sb.AppendLine("| # | 報價名稱 | 報價檔案編號 | 客戶名稱 | 材料 | 表面處理 | 熱處理 | 材料費 | 加工費 | 表面費 | 熱處費 | 總計 | 建立日期 |");
+        sb.AppendLine("|---|---------|------------|---------|------|---------|-------|--------|--------|--------|--------|------|---------|");
+        int idx = 1;
+        foreach (var r in rows)
+        {
+            sb.AppendLine($"| {idx++} | {r.QuoteName} | {r.QuoteFileName} | {r.CustomerName} | {r.MaterialName} | {r.SurfaceTreatment} | {r.HeatTreatment} | {r.MaterialCost:N2} | {r.ProcessingCost:N2} | {r.SurfaceTreatmentCost:N2} | {r.HeatTreatmentCost:N2} | {r.TotalCost:N2} | {r.CreatedAt} |");
+        }
         return sb.ToString();
     }
 
